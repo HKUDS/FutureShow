@@ -87,6 +87,23 @@ def _resolve_market_and_token(market_slug: str, outcome: str) -> tuple[Dict[str,
     return market, token_id
 
 
+def _validate_market_tradable(market: Dict[str, Any]) -> None:
+    """Validate that a market is tradable before placing orders."""
+    if not market:
+        raise ValueError("Market data is empty")
+
+    if market.get("closed"):
+        raise ValueError(f"Market {market.get('slug')} is closed")
+
+    status = str(market.get("status", "")).lower()
+    if status in ("closed", "resolved", "settled"):
+        raise ValueError(f"Market {market.get('slug')} status is {status}")
+
+    accepting_orders = market.get("acceptingOrders", True)
+    if not accepting_orders:
+        raise ValueError(f"Market {market.get('slug')} is not accepting orders")
+
+
 def _get_order_book(token_id: str, signature: str) -> Dict[str, Any]:
     clob_host = os.getenv("CLOB_HOST", BASE_URL)
     response = requests.get(f"{clob_host}/book", params={"token_id": token_id}, timeout=10)
@@ -426,7 +443,10 @@ def buy(market_slug: str, outcome: str, cost_usd: float) -> Dict[str, Any]:
         return {"error": "Insufficient cash", "cash": cash, "required": cost_usd}
 
     try:
-        _, token_id = _resolve_market_and_token(market_slug, outcome)
+        market, token_id = _resolve_market_and_token(market_slug, outcome)
+        _validate_market_tradable(market)
+    except ValueError as exc:
+        return {"error": str(exc)}
     except Exception as exc:
         return {"error": str(exc)}
 
@@ -515,7 +535,10 @@ def sell(market_slug: str, outcome: str, shares: float) -> Dict[str, Any]:
         return {"error": "Insufficient shares", "have": have, "want": shares}
 
     try:
-        _, token_id = _resolve_market_and_token(market_slug, outcome)
+        market, token_id = _resolve_market_and_token(market_slug, outcome)
+        _validate_market_tradable(market)
+    except ValueError as exc:
+        return {"error": str(exc)}
     except Exception as exc:
         return {"error": str(exc)}
 
