@@ -600,16 +600,25 @@ def settle(market_slug: str, signature: str) -> Dict[str, Any]:
     winners = set()
     tokens = m.get("tokens") or []
     if isinstance(tokens, list) and tokens and isinstance(tokens[0], dict):
-        winners = {str(t.get("outcome")) for t in tokens if t.get("winner")}
+        winners = {
+            str(t["outcome"]).strip()
+            for t in tokens
+            if t.get("winner")
+            and t.get("outcome") is not None
+            and str(t.get("outcome")).strip()
+        }
     if not winners:
         for key in ("winningOutcome", "winning_outcome", "resolvedOutcome", "resolved_outcome", "result"):
-            if m.get(key) is not None:
-                val = m.get(key)
-                if isinstance(val, list):
-                    winners = {str(x) for x in val}
-                else:
-                    winners = {str(val)}
+            val = m.get(key)
+            if val is None:
+                continue
+            values = val if isinstance(val, list) else [val]
+            winners = {str(x).strip() for x in values if x is not None and str(x).strip()}
+            if winners:
                 break
+
+    if not winners:
+        return {"error": "market resolution unavailable"}
 
     new_positions = dict(positions)
     realized = 0.0
